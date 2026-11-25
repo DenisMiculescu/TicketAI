@@ -6,6 +6,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+import json
+from prompts import SYSTEM_PROMPT
+
 load_dotenv()
 
 app = FastAPI(title="TicketAI API")
@@ -39,14 +42,11 @@ async def analyse_ticket(ticket: Ticket):
 
     payload = {
         "model": MODEL,
+        "temperature": 0.1,
         "messages": [
             {
                 "role": "system",
-                "content": (
-                    "You are an IT support assistant. "
-                    "Explain the likely issue in one short sentence. "
-                    "Do not claim to know the root cause without evidence."
-                )
+                "content": SYSTEM_PROMPT
             },
             {
                 "role": "user",
@@ -72,9 +72,11 @@ async def analyse_ticket(ticket: Ticket):
         if not isinstance(analysis, str) or not analysis.strip():
             raise ValueError("Empty AI response")
 
+        result = json.loads(analysis)
+
         return {
             "description": ticket.description,
-            "analysis": analysis
+            "classification": result
         }
 
     except httpx.HTTPStatusError as e:
