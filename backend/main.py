@@ -1,13 +1,13 @@
 
 import os
-
 import httpx
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import ValidationError
 
-import json
 from prompts import SYSTEM_PROMPT
+from schemas import Ticket, TicketClassification
 
 load_dotenv()
 
@@ -15,10 +15,6 @@ app = FastAPI(title="TicketAI API")
 
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 MODEL = os.getenv("OPENROUTER_MODEL")
-
-
-class Ticket(BaseModel):
-    description: str = Field(min_length=1)
 
 
 @app.get("/")
@@ -72,11 +68,11 @@ async def analyse_ticket(ticket: Ticket):
         if not isinstance(analysis, str) or not analysis.strip():
             raise ValueError("Empty AI response")
 
-        result = json.loads(analysis)
+        result = TicketClassification.model_validate_json(analysis)
 
         return {
             "description": ticket.description,
-            "classification": result
+            "classification": result.model_dump()
         }
 
     except httpx.HTTPStatusError as e:
@@ -94,6 +90,14 @@ async def analyse_ticket(ticket: Ticket):
         raise HTTPException(
             status_code=502,
             detail="Unable to connect to OpenRouter"
+        )
+
+    except ValidationError as e:
+        print("AI validation error:", e.errors(include_input=False))
+
+        raise HTTPException(
+            status_code=502,
+            detail="AI returned an invalid ticket classification"
         )
 
     except (ValueError, KeyError, IndexError, TypeError) as e:
